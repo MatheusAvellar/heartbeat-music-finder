@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title> BPM </title>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <script async type="text/javascript" src="../resources/free.js"></script>
+  <style type="text/css">
+    html,body {
+      height: 100%;
+      width: 100%;
+    }
+    body {
+      background-color: #040613;
+      color: #efefef;
+      font-family: sans-serif;
+      margin: 0;
+      overflow-y: hidden;
+    }
+    body.flow {
+      overflow-y: scroll;
+    }
+    main {
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      height: 100%;
+      width: 100%;
+    }
+    #heart {
+      color: red;
+      font-size: 150px;
+      user-select: none;
+      cursor: pointer;
+      opacity: 1;
+      transition: font-size .5s ease;
+    }
+    #heart:active {
+      transform: scale(0.9);
+    }
+    #heart.gone {
+      cursor: default;
+      pointer-events: none;
+      font-size: 80px;
+      animation-name: beat;
+      animation-timing-function: ease;
+      animation-iteration-count: infinite;
+    }
+    #out.started::after {
+      content: " bpm";
+    }
+
+    @keyframes beat {
+      0%{transform: scale(1);}
+      100%{transform: scale(0.9);}
+    }
+
+    #suggestions {
+      list-style: none;
+      width: 75%;
+      max-width: 900px;
+      min-width: 700px;
+      margin: -200px auto 20px auto;
+      border-radius: 2px;
+      background-color: #eee;
+      box-shadow: 2px 2px 0 #696969;
+      box-sizing: border-box;
+      color: #0a0a0a;
+      padding: 20px;
+
+      opacity: 0;
+      height: 0px;
+      overflow-y: hidden;
+
+      transition: all 1s ease;
+    }
+    #suggestions.visible {
+      opacity: 1;
+      height: 500px;
+      overflow-y: auto;
+    }
+    #suggestions li {
+      margin-bottom: 15px;
+      padding-bottom: 15px;
+      border-bottom: 1px solid #d6d6d6;
+    }
+    #suggestions li:last-of-type {
+      margin: 0;
+      border: 0;
+      padding: 0;
+    }
+    #suggestions h2 {
+      margin: 0;
+      font-size: 20px;
+    }
+    #suggestions p {
+      color: #656565;
+      font-size: 15px;
+      margin: 0;
+    }
+    #suggestions p span {
+      margin-right: 25px;
+      vertical-align: middle;
+    }
+    #suggestions p span:last-of-type {
+      margin: 0;
+    }
+    #suggestions:empty::after {
+      content: "Loading…";
+    }
+    #suggestions section {
+      margin-bottom: 40px;
+    }
+    #suggestions section:last-of-type {
+      margin: 0;
+    }
+    #suggestions section::before {
+      font-size: 12px;
+      color: #656565;
+    }
+
+    #suggestions section:nth-of-type(1)::before { content: "Exact matches"; }
+    #suggestions section:nth-of-type(2)::before { content: "Close matches"; }
+  </style>
+</head>
+<body>
+  <main>
+    <div id="heart">❤&#xFE0E;</div>
+    <p id="readable"> Click on the heart to start </p>
+    <output id="out">&nbsp;</output>
+  </main>
+  <ul id="suggestions"></ul>
+  <script type="text/javascript">
+    const suggestions = document.getElementById("suggestions");
+    const readable = document.getElementById("readable");
+    const heart = document.getElementById("heart");
+    const out = document.getElementById("out");
+    let avg = 0;
+    let total = 0;
+    let count = 0;
+    let prev = 0;
+    let diffs = [];
+    let oldBpm = 0;
+    let same = 0;
+
+    function onBeat() {
+      count++;
+      const curr = Date.now();
+      const diff = curr - prev;
+      if(prev) {
+        out.className = "started";
+        readable.innerText = "Waiting for your heartbeat to stabilize…";
+        diffs.push(diff);
+        total += diff;
+        avg = total/count;
+
+        const bpm = Math.round(60000 / avg);
+
+        if(oldBpm != bpm) {
+          same = 0;
+          oldBpm = bpm;
+          out.innerText = bpm;
+        } else {
+          same++;
+          if(same >= 3) {
+            done(bpm);
+          }
+        }
+      } else {
+        readable.innerText = "Measuring…";
+      }
+
+      prev = curr;
+    }
+
+    function done(bpm) {
+      if(bpm < 60) console.warn("Oh boy this is slow");
+      if(bpm > 100) console.warn("Oh boy this is fast");
+
+      heart.className = "gone";
+      readable.innerText = "Done!";
+      setTimeout(() => suggestions.className = "visible", 1000);
+      setTimeout(() => document.body.className = "flow", 1100);
+
+      const seconds = 1/(bpm * 0.016666666666666);
+      heart.style.animationDuration = seconds + "s";
+
+
+      if(bpm < 80 || bpm > 203) {
+        console.warn("welp");
+      } else {
+
+        const PROXY = "https://cors-anywhere.herokuapp.com/";
+        const PREFIX = "https://www.cs.ubc.ca/~davet/music/bpm/";
+        const request = new XMLHttpRequest();
+        request.open("GET", PROXY + PREFIX + bpm + ".html", true);
+        request.onload = function() {
+          if(this.status >= 200 && this.status < 400) {
+            console.log("SUCCESS");
+            const data = this.response;
+            console.log(data);
+
+            // Gross cleaning up process here
+            const filter_reg = /<a href="\.\.\/artist\/[A-Z0-9]\/[A-Z0-9]+\.html">(.+?)<\/a><\/td>\s*<td><a href="\.\.\/title\/[A-Za-z0-9]{1}\.html#[A-Za-z0-9_\-]+">(.+?)<\/a><\/td>\s*<td> ([0-9]+:[0-9]{2})<\/td>\s*<td>([0-9]{2,3}\.[0-9])<\/td>\s*<td><a href="\.\.\/year\/([0-9]+)/g;
+            const arr = (
+              data.match(filter_reg) || []
+            ).map(e => e
+              .replace(filter_reg,"$1\u0001$2\u0001$3\u0001$4\u0001$5")
+              .replace(/<\/?a[A-Za-z0-9\.\/"= ]*>/g,"")
+              .split("\u0001")
+            );
+
+            if(arr.length <= 0) {
+              suggestions.innerText = "Something went wrong :c";
+              return;
+            }
+
+            let prev;
+            const exact = document.createElement("section");
+            const others = document.createElement("section");
+            for(let i = arr.length - 1; i >= 0; i--) {
+              // Discard duplicates
+              const title = arr[i][0] + " – " + arr[i][1];
+              if(prev == title)
+                continue;
+              prev = title;
+
+              const li = document.createElement("li");
+              const h2 = document.createElement("h2");
+              const p = document.createElement("p");
+              const span_year = document.createElement("span");
+              const span_bpm = document.createElement("span");
+              const span_time = document.createElement("span");
+
+              h2.innerText = title;
+              span_year.innerText = "(" + arr[i][4] + ")";
+              span_time.innerText = arr[i][2];
+              span_bpm.innerText = +arr[i][3] + " BPM";
+
+              p.appendChild(span_year);
+              p.appendChild(span_time);
+              p.appendChild(span_bpm);
+              li.appendChild(h2);
+              li.appendChild(p);
+
+              // Separate incorrect BPMs
+              if(+arr[i][3] == bpm)
+                exact.appendChild(li);
+              else
+                others.appendChild(li);
+            }
+            suggestions.appendChild(exact);
+            suggestions.appendChild(others);
+
+            console.log(arr);
+          } else {
+            console.log("Woops.", this.status);
+          }
+        };
+        request.onerror = function(e) { console.error(e); };
+        request.send();
+
+      }
+    }
+    //addEventListener("keypress", onBeat, false);
+    heart.addEventListener("click", onBeat, false);
+  </script>
+</body>
+</html>
